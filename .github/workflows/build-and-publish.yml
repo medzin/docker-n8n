@@ -1,0 +1,92 @@
+name: Build and Publish n8n
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check for new versions
+        id: set-matrix
+        run: |
+          # Run the script to determine versions to build
+          MATRIX_JSON=$(./scripts/determine-versions.sh)
+
+          echo "Build matrix: $MATRIX_JSON"
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: check-versions
+    if: ${{ needs.check-versions.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        version: ${{ fromJson(needs.check-versions.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to dhi.io
+        uses: docker/login-action@v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build for testing (Local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          build-args: |
+            N8N_VERSION=${{ matrix.version }}
+          tags: medzin/n8n:${{ matrix.version }}
+
+      - name: Run Permission Tests
+        run: |
+          ./scripts/test-permissions.sh medzin/n8n:${{ matrix.version }} skip-build
+
+      - name: Check if this version is the latest stable
+        id: check_latest
+        run: |
+          # Get the single latest stable release tag from GitHub to decide if we tag 'latest'
+          LATEST_TAG=$(curl -s https://api.github.com/repos/n8n-io/n8n/releases/latest | jq -r .tag_name | sed 's/n8n@//')
+
+          if [ "${{ matrix.version }}" == "$LATEST_TAG" ]; then
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            N8N_VERSION=${{ matrix.version }}
+          tags: |
+            medzin/n8n:${{ matrix.version }}
+            ${{ steps.check_latest.outputs.is_latest == 'true' && 'medzin/n8n:latest' || '' }}
+          platforms: linux/amd64,linux/arm64
