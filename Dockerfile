@@ -29,7 +29,11 @@ RUN apk add --no-cache busybox-binsh && \
     ca-certificates \
     su-exec \
     shadow \
-    libc6-compat && \
+    libc6-compat \
+    python3 \
+    py3-setuptools \
+    make \
+    g++ && \
     rm -rf /tmp/* /root/.npm /root/.cache/node /opt/yarn*
 
 WORKDIR ${N8N_USER_FOLDER}
@@ -39,7 +43,7 @@ RUN npm install -g n8n@${N8N_VERSION}
 COPY docker-entrypoint.sh /
 
 RUN cd ${NODE_PATH}/n8n && \
-    npm rebuild sqlite3 && \
+    npm rebuild sqlite3 isolated-vm && \
     ln -s ${NODE_PATH}/n8n/bin/n8n /usr/local/bin/n8n && \
     mkdir -p ${N8N_USER_FOLDER}/.n8n && \
     chown -R node:node ${N8N_USER_FOLDER} && \
