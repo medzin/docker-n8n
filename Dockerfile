@@ -14,7 +14,7 @@ ENV NODE_PATH=/opt/nodejs/node-v${NODE_VERSION}/lib/node_modules
 ENV SHELL=/bin/sh
 
 RUN apk update && \
-    apk upgrade --no-cache && \
+    apk upgrade --no-cache --available && \
     apk add --no-cache busybox-binsh && \
     apk --no-cache add --virtual .build-deps-fonts msttcorefonts-installer fontconfig && \
     update-ms-fonts && \
