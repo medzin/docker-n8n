@@ -13,14 +13,14 @@ ENV NODE_ICU_DATA=/usr/local/lib/node_modules/full-icu
 ENV NODE_PATH=/opt/nodejs/node-v${NODE_VERSION}/lib/node_modules
 ENV SHELL=/bin/sh
 
-RUN apk add --no-cache busybox-binsh && \
+RUN apk update && \
+    apk upgrade --no-cache && \
+    apk add --no-cache busybox-binsh && \
     apk --no-cache add --virtual .build-deps-fonts msttcorefonts-installer fontconfig && \
     update-ms-fonts && \
     fc-cache -f && \
     apk del .build-deps-fonts && \
     find /usr/share/fonts/truetype/msttcorefonts/ -type l -exec unlink {} \; && \
-    apk update && \
-    apk upgrade --no-cache && \
     apk add --no-cache \
     git \
     openssh \
