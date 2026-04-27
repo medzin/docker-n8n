@@ -10,7 +10,8 @@ echo "Fetching n8n releases from GitHub..." >&2
 # 1. Fetch stable n8n releases from GitHub (Top 30)
 # We filter out prereleases and strip 'n8n@'
 N8N_RELEASES=$(curl -s "https://api.github.com/repos/$N8N_REPO/releases" \
-  | jq -r '.[] | select(.prerelease==false) | .tag_name | sub("n8n@";"")')
+  | jq -r '.[] | select(.prerelease==false) | .tag_name | sub("n8n@";"")' \
+  | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$')
 
 echo "Fetching existing tags from Docker Hub for $DOCKER_REPO..." >&2
 
