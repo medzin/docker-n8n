@@ -1,4 +1,4 @@
-ARG NODE_VERSION=24.14.1
+ARG NODE_VERSION=24.15.0
 
 FROM dhi.io/node:${NODE_VERSION}-alpine3.22-dev
 
@@ -45,7 +45,7 @@ RUN npm install -g n8n@${N8N_VERSION}
 COPY docker-entrypoint.sh /
 
 RUN cd ${NODE_PATH}/n8n && \
-    npm rebuild sqlite3 isolated-vm && \
+    npm rebuild sqlite3 && \
     ln -s ${NODE_PATH}/n8n/bin/n8n /usr/local/bin/n8n && \
     mkdir -p ${N8N_USER_FOLDER}/.n8n && \
     chown -R node:node ${N8N_USER_FOLDER} && \
