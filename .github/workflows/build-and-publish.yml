@@ -60,6 +60,7 @@ jobs:
           context: .
           load: true
           cache-from: type=gha,scope=n8n-build
+          cache-to: type=gha,scope=n8n-build,mode=max
           build-args: |
             N8N_VERSION=${{ matrix.version }}
           tags: medzin/n8n:${{ matrix.version }}
