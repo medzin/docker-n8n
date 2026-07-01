@@ -69,6 +69,10 @@ jobs:
         run: |
           ./scripts/test-permissions.sh medzin/n8n:${{ matrix.version }} skip-build
 
+      - name: Run Startup Smoke Test
+        run: |
+          ./scripts/test-startup.sh medzin/n8n:${{ matrix.version }} skip-build
+
       - name: Check if this version is the latest stable
         id: check_latest
         run: |
