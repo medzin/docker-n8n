@@ -44,18 +44,21 @@ DIR_GID=$(stat -c '%g' "$TEST_DIR")
 echo "Directory UID: $DIR_UID (Expected: $CURRENT_UID)"
 echo "Directory GID: $DIR_GID (Expected: $CURRENT_GID)"
 
+RESULT=0
 if [ "$DIR_UID" -eq "$CURRENT_UID" ] && [ "$DIR_GID" -eq "$CURRENT_GID" ]; then
   echo "SUCCESS: Permissions are correct."
 else
   echo "FAILURE: Permissions do not match."
   # Show logs to debug
-  docker logs "$CONTAINER_NAME"
+  docker logs "$CONTAINER_NAME" 2>/dev/null || echo "No container logs available."
+  RESULT=1
 fi
 
 # Cleanup
 echo "Cleaning up..."
-docker stop "$CONTAINER_NAME"
+docker stop "$CONTAINER_NAME" 2>/dev/null || echo "Container already stopped/removed."
 # We can remove the dir because we own it (if success) or we might need sudo if fail/root owned it
 rm -rf "$TEST_DIR" || echo "Warning: Could not remove test directory. You might need sudo."
 
 echo "Done."
+exit "$RESULT"
