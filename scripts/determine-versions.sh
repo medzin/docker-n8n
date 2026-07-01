@@ -4,6 +4,15 @@ set -e
 # Configuration
 N8N_REPO="n8n-io/n8n"
 DOCKER_REPO="medzin/n8n"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKIP_FILE="$SCRIPT_DIR/../skip-versions.txt"
+
+# Returns success if the given version is listed in skip-versions.txt.
+is_skipped() {
+  [ -f "$SKIP_FILE" ] || return 1
+  # Extract the leading x.y.z from each line (ignoring comments) and match exactly.
+  grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' "$SKIP_FILE" | grep -qx "$1"
+}
 
 echo "Fetching n8n releases from GitHub..." >&2
 
@@ -58,9 +67,20 @@ else
   fi
 fi
 
+# Drop any versions flagged as known-broken in skip-versions.txt
+FILTERED_BUILD=()
+for VER in "${TO_BUILD[@]}"; do
+  if is_skipped "$VER"; then
+    echo "Skipping known-broken version: $VER" >&2
+  else
+    FILTERED_BUILD+=("$VER")
+  fi
+done
+TO_BUILD=("${FILTERED_BUILD[@]}")
+
 # Sort the build list (Oldest -> Newest) for consistent build order
 if [ ${#TO_BUILD[@]} -gt 0 ]; then
-   # Use a temporary file or specific sorting strategy if the array is large, 
+   # Use a temporary file or specific sorting strategy if the array is large,
    # but for version numbers, sort -V works well.
    SORTED_BUILD=($(printf '%s\n' "${TO_BUILD[@]}" | sort -V))
 else
