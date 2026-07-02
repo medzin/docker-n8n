@@ -1,9 +1,2 @@
 # Known-broken n8n versions to skip in the build pipeline.
 # One version per line (x.y.z). Text after '#' is ignored.
-#
-# These versions crash on startup when installed via `npm install -g n8n`
-# (flat npm layout) because a fresh install resolves a newer
-# @langchain/langgraph-checkpoint than n8n's pinned @langchain/core@1.1.41
-# supports. See https://github.com/n8n-io/n8n/issues/33370
-2.28.3
-2.28.4

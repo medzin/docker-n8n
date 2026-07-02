@@ -54,6 +54,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve base image
+        id: base
+        run: |
+          BASE_IMAGE=$(./scripts/resolve-base-image.sh "${{ matrix.version }}")
+          echo "Resolved base image: $BASE_IMAGE"
+          echo "image=$BASE_IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Build for testing (Local)
         uses: docker/build-push-action@v7
         with:
@@ -63,6 +70,7 @@ jobs:
           cache-to: type=gha,scope=n8n-build,mode=max
           build-args: |
             N8N_VERSION=${{ matrix.version }}
+            N8N_BASE_IMAGE=${{ steps.base.outputs.image }}
           tags: medzin/n8n:${{ matrix.version }}
 
       - name: Run Permission Tests
@@ -94,6 +102,7 @@ jobs:
           cache-to: type=gha,scope=n8n-build,mode=max
           build-args: |
             N8N_VERSION=${{ matrix.version }}
+            N8N_BASE_IMAGE=${{ steps.base.outputs.image }}
           tags: |
             medzin/n8n:${{ matrix.version }}
             ${{ steps.check_latest.outputs.is_latest == 'true' && 'medzin/n8n:latest' || '' }}

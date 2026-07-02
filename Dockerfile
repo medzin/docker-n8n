@@ -1,56 +1,45 @@
-ARG NODE_VERSION=24.16.0
+# n8n ships as a Docker image built from a pnpm-locked monorepo. Installing it
+# with `npm install -g n8n` resolves a fresh (lockfile-less) dependency tree
+# that is broken for some releases (see https://github.com/n8n-io/n8n/issues/33370),
+# so we build ON TOP of the official image instead of reinstalling n8n.
+ARG N8N_VERSION=latest
 
-FROM dhi.io/node:${NODE_VERSION}-alpine3.24-dev
+# The apk binary must come from the SAME base n8n builds on, otherwise its
+# musl/library linkage won't match. Keep this in sync with the FROM line in
+# n8n's docker/images/n8n-base/Dockerfile whenever n8n bumps its base image.
+ARG N8N_BASE_IMAGE=dhi.io/node:24.16.0-alpine3.24-dev
 
-ARG N8N_RELEASE_TYPE=stable
+# Source stage: only used to lift the apk binary the official image strips out.
+FROM ${N8N_BASE_IMAGE} AS apk-src
+
+FROM n8nio/n8n:${N8N_VERSION}
+
+# Re-declare in this stage so it is in scope for the LABEL below.
+ARG N8N_VERSION
 ARG N8N_USER_FOLDER=/data
-ARG N8N_VERSION=stable
-
-ENV N8N_RELEASE_TYPE=${N8N_RELEASE_TYPE}
 ENV N8N_USER_FOLDER=${N8N_USER_FOLDER}
-ENV NODE_ENV=production
-ENV NODE_PATH=/usr/local/lib/node_modules
-ENV SHELL=/bin/sh
 
-RUN apk add --no-cache busybox-binsh && \
-    apk --no-cache add --virtual .build-deps-fonts msttcorefonts-installer fontconfig && \
-    update-ms-fonts && \
-    fc-cache -f && \
-    apk del .build-deps-fonts && \
-    find /usr/share/fonts/truetype/msttcorefonts/ -type l -exec unlink {} \; && \
-    apk add --no-cache \
-    git \
-    openssh \
-    openssl \
-    graphicsmagick \
-    tini \
-    tzdata \
-    ca-certificates \
-    su-exec \
-    shadow \
-    libc6-compat \
-    python3 \
-    py3-setuptools \
-    make \
-    g++ && \
-    rm -rf /tmp/* /root/.npm /root/.cache/node /opt/yarn*
+# The entrypoint remaps the runtime user and drops privileges, so it must start
+# as root (the official image runs as the non-root `node` user).
+USER root
 
-# Alpine 3.24 ships node at /usr/bin; symlink it to /usr/local/bin so the path
-# matches what the cloud launch and AppArmor profile expect.
-RUN mkdir -p /usr/local/bin && ln -sf /usr/bin/node /usr/local/bin/node
-
-WORKDIR ${N8N_USER_FOLDER}
-
-RUN npm install -g n8n@${N8N_VERSION} && \
-    rm -rf /root/.npm /tmp/*
-
-RUN cd ${NODE_PATH}/n8n && \
-    npm rebuild sqlite3 && \
-    mkdir -p ${N8N_USER_FOLDER}/.n8n && \
-    chown -R node:node ${N8N_USER_FOLDER} && \
-    rm -rf /root/.npm /tmp/*
+# The official image runs `apk del apk-tools` but keeps /etc/apk and the package
+# DB, so restoring just the binary re-enables the package manager without
+# disturbing the installed set. We need it for the entrypoint's privilege drop
+# (su-exec) and user remap (shadow), and for runtime setup hooks such as the
+# Unraid Tailscale integration.
+COPY --from=apk-src /sbin/apk /sbin/apk
+RUN apk add --no-cache su-exec shadow && \
+    # Point node's home at the data volume. su-exec derives HOME from the passwd
+    # entry, so this is what makes os.homedir() writes land on the writable,
+    # persistent volume rather than the ephemeral /home/node.
+    usermod -d "${N8N_USER_FOLDER}" node
 
 COPY docker-entrypoint.sh /
+
+RUN mkdir -p "${N8N_USER_FOLDER}/.n8n" && chown -R node:node "${N8N_USER_FOLDER}"
+
+WORKDIR ${N8N_USER_FOLDER}
 
 EXPOSE 5678/tcp
 
