@@ -18,9 +18,34 @@ echo "Fetching n8n releases from GitHub..." >&2
 
 # 1. Fetch stable n8n releases from GitHub (Top 30)
 # We filter out prereleases and strip 'n8n@'
-N8N_RELEASES=$(curl -s "https://api.github.com/repos/$N8N_REPO/releases" \
-  | jq -r '.[] | select(.prerelease==false) | .tag_name | sub("n8n@";"")' \
-  | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$')
+GITHUB_RESPONSE=$(mktemp)
+trap 'rm -f "$GITHUB_RESPONSE"' EXIT
+
+GITHUB_CURL_ARGS=(
+  --fail-with-body
+  --silent
+  --show-error
+  --output "$GITHUB_RESPONSE"
+  --header "Accept: application/vnd.github+json"
+  --header "X-GitHub-Api-Version: 2022-11-28"
+)
+
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  GITHUB_CURL_ARGS+=(--header "Authorization: Bearer $GITHUB_TOKEN")
+fi
+
+if ! curl "${GITHUB_CURL_ARGS[@]}" "https://api.github.com/repos/$N8N_REPO/releases"; then
+  echo "GitHub API response body:" >&2
+  cat "$GITHUB_RESPONSE" >&2
+  exit 1
+fi
+
+if ! N8N_RELEASES=$(jq -r '.[] | select(.prerelease==false) | .tag_name | sub("n8n@";"")' "$GITHUB_RESPONSE" \
+  | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'); then
+  echo "Unexpected GitHub API response body:" >&2
+  cat "$GITHUB_RESPONSE" >&2
+  exit 1
+fi
 
 echo "Fetching existing tags from Docker Hub for $DOCKER_REPO..." >&2
 
