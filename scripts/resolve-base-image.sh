@@ -27,12 +27,40 @@ if [ -z "$CONTENT" ]; then
   exit 1
 fi
 
-# The image reference from the first FROM line (keeps any @sha256 digest,
-# drops a trailing "AS <stage>" if present).
-BASE_IMAGE=$(echo "$CONTENT" | grep -m1 -E '^FROM ' | awk '{print $2}')
+# Extract the first FROM token, resolving an ARG default when necessary.
+FROM_IMAGE=$(echo "$CONTENT" | grep -m1 -E '^FROM ' | awk '{print $2}')
+
+if [ -z "$FROM_IMAGE" ]; then
+  echo "No FROM line found in ${BASE_DOCKERFILE} at ${REF}" >&2
+  exit 1
+fi
+
+BASE_IMAGE=$FROM_IMAGE
+
+case "$BASE_IMAGE" in
+  '${'*'}')
+    ARG_NAME=${BASE_IMAGE#'${'}
+    ARG_NAME=${ARG_NAME%'}'}
+
+    case "$ARG_NAME" in
+      ''|[!A-Za-z_]*|*[!A-Za-z0-9_]*)
+        echo "Unsupported FROM variable ${BASE_IMAGE} in ${BASE_DOCKERFILE} at ${REF}" >&2
+        exit 1
+        ;;
+    esac
+
+    BASE_IMAGE=$(echo "$CONTENT" | awk -v name="$ARG_NAME" '
+      $1 == "FROM" { exit }
+      $1 == "ARG" && index($2, name "=") == 1 {
+        print substr($2, length(name) + 2)
+        exit
+      }
+    ')
+    ;;
+esac
 
 if [ -z "$BASE_IMAGE" ]; then
-  echo "No FROM line found in ${BASE_DOCKERFILE} at ${REF}" >&2
+  echo "No default found for ARG ${ARG_NAME} in ${BASE_DOCKERFILE} at ${REF}" >&2
   exit 1
 fi
 
