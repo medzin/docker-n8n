@@ -4,13 +4,19 @@
 # so we build ON TOP of the official image instead of reinstalling n8n.
 ARG N8N_VERSION=latest
 
-# The apk binary must come from the SAME base n8n builds on, otherwise its
-# musl/library linkage won't match. Keep this in sync with the FROM line in
-# n8n's docker/images/n8n-base/Dockerfile whenever n8n bumps its base image.
-ARG N8N_BASE_IMAGE=dhi.io/node:24.16.0-alpine3.24-dev
+# apk should come from the SAME base n8n builds on so its version matches the
+# package DB and repositories left in the official image. Keep this in sync with
+# the FROM line in n8n's docker/images/n8n-base/Dockerfile (CI resolves it per
+# version via scripts/resolve-base-image.sh; this default is for local builds).
+ARG N8N_BASE_IMAGE=dhi.io/node:24.22.1-alpine3.24-dev
 
-# Source stage: only used to lift the apk binary the official image strips out.
+# Source stage: only used to provide the apk binary the official image strips
+# out. We take the statically linked apk.static rather than /sbin/apk: since
+# apk-tools 3, /sbin/apk links against libapk.so.3 and libssl.so.3, which the
+# official image removes along with apk-tools, so the dynamic binary can't run.
 FROM ${N8N_BASE_IMAGE} AS apk-src
+USER root
+RUN apk add --no-cache apk-tools-static
 
 FROM n8nio/n8n:${N8N_VERSION}
 
@@ -28,7 +34,7 @@ USER root
 # disturbing the installed set. We need it for the entrypoint's privilege drop
 # (su-exec) and user remap (shadow), and for runtime setup hooks such as the
 # Unraid Tailscale integration.
-COPY --from=apk-src /sbin/apk /sbin/apk
+COPY --from=apk-src /sbin/apk.static /sbin/apk
 RUN apk add --no-cache su-exec shadow && \
     # Point node's home at the data volume. su-exec derives HOME from the passwd
     # entry, so this is what makes os.homedir() writes land on the writable,
