@@ -9,7 +9,7 @@ ARG N8N_VERSION=latest
 # n8n's docker/images/n8n-base/Dockerfile whenever n8n bumps its base image.
 ARG N8N_BASE_IMAGE=dhi.io/node:24.16.0-alpine3.24-dev
 
-# Source stage: only used to lift the apk binary the official image strips out.
+# Source stage: restores apk and its shared library stripped by the official image.
 FROM ${N8N_BASE_IMAGE} AS apk-src
 
 FROM n8nio/n8n:${N8N_VERSION}
@@ -24,11 +24,12 @@ ENV N8N_USER_FOLDER=${N8N_USER_FOLDER}
 USER root
 
 # The official image runs `apk del apk-tools` but keeps /etc/apk and the package
-# DB, so restoring just the binary re-enables the package manager without
+# DB, so restoring the binary and library re-enables the package manager without
 # disturbing the installed set. We need it for the entrypoint's privilege drop
 # (su-exec) and user remap (shadow), and for runtime setup hooks such as the
 # Unraid Tailscale integration.
 COPY --from=apk-src /sbin/apk /sbin/apk
+COPY --from=apk-src /usr/lib/libapk.so.* /usr/lib/
 RUN apk add --no-cache su-exec shadow && \
     # Point node's home at the data volume. su-exec derives HOME from the passwd
     # entry, so this is what makes os.homedir() writes land on the writable,
