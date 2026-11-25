@@ -30,6 +30,7 @@ jobs:
     if: ${{ needs.check-versions.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       max-parallel: 1
       matrix:
         version: ${{ fromJson(needs.check-versions.outputs.matrix) }}
