@@ -2,9 +2,9 @@
 set -e
 
 # Resolves the base image a given n8n version was built on, so we can lift a
-# matching `apk` binary from it (see Dockerfile). n8n pins this in its own
-# base Dockerfile, so we read the FROM line at the matching release tag - this
-# stays correct across the build matrix even when n8n bumps its base.
+# matching `apk` binary from it (see Dockerfile). Read the FROM line at the
+# matching release tag, falling back to the upstream Bake target for ARGs
+# without a Dockerfile default.
 
 VERSION="$1"
 if [ -z "$VERSION" ]; then
@@ -56,6 +56,15 @@ case "$BASE_IMAGE" in
         exit
       }
     ')
+
+    if [ -z "$BASE_IMAGE" ]; then
+      # Newer releases centralize image pins in the Bake configuration.
+      BAKE_FILE=$(mktemp)
+      trap 'rm -f "$BAKE_FILE"' EXIT
+      curl -fsS "https://raw.githubusercontent.com/${REPO}/${REF}/docker/docker-bake.hcl" -o "$BAKE_FILE"
+      BAKE_CONFIG=$(docker buildx bake -f "$BAKE_FILE" --print base)
+      BASE_IMAGE=$(jq -er --arg name "$ARG_NAME" '.target.base.args[$name] | strings | select(length > 0)' <<< "$BAKE_CONFIG")
+    fi
     ;;
 esac
 
